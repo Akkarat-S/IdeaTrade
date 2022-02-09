@@ -13,6 +13,7 @@ import 'package:mytestapp/model/user_model.dart';
 import 'package:mytestapp/services/limitout.dart';
 import 'package:mytestapp/services/nowdate.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:mytestapp/services/timescore.dart';
 
 class DashboardPage extends StatefulWidget {
   UserModel user;
@@ -72,7 +73,6 @@ class _DashboardPageState extends State<DashboardPage> {
               })
             });
   }
-
 
   NetworkImage _image(String jobID) {
     String? userId = jobuser[jobID];
@@ -195,7 +195,7 @@ class _DashboardPageState extends State<DashboardPage> {
               })
             });
     listRecive = recive;
-    
+
     setState(() {
       if (stage == "Recived") {
         List<JobModel> N = [];
@@ -208,7 +208,6 @@ class _DashboardPageState extends State<DashboardPage> {
         //_showjob(listdashboard);
         listdashboard = listRecive;
       }
-      
     });
   }
 
@@ -508,6 +507,98 @@ class _DashboardPageState extends State<DashboardPage> {
     return Colors.white;
   }
 
+  _setTime(JobModel job) async {
+    String time = TimeScore().timescore(job.DateTimeLimit);
+    print(time);
+    List<String> timelimit = time.split(":");
+    H = await int.parse(timelimit[0]);
+    M = await int.parse(timelimit[1]);
+    print("$H:$M");
+    if (H < 0) {
+      print("Over Time");
+      timecheck = false;
+    } else {
+      timecheck = true;
+    }
+    //startTimer();
+  }
+
+  _timeover(JobModel job) async {
+    await FirebaseFirestore.instance.collection("Jobs").doc(job.jobID).update({
+      "Status": "Time Over",
+    });
+    DateTime _now = DateTime.now();
+    String date =
+        '${_now.day}/${_now.month}/${_now.year} ${_now.hour}:${_now.minute}';
+    //Action Log
+    await log.doc().set({
+      "JobID": job.jobID,
+      "Owner": user.ID,
+      "DateLog": date,
+      "Status": "Time Over",
+      "Type": "User",
+      "DateAt": DateTime.now().millisecondsSinceEpoch,
+    });
+    //Creater Log
+    await log.doc().set({
+      "JobID": job.jobID,
+      "Owner": job.CreaterID,
+      "DateLog": date,
+      "Status": "Time Over",
+      "Type": "Create",
+      "DateAt": DateTime.now().millisecondsSinceEpoch,
+    });
+    await FirebaseFirestore.instance
+        .collection("TeamMember")
+        .where("Role", isEqualTo: "Leader")
+        .where("TeamName", isEqualTo: job.JobTeam)
+        .get()
+        .then((querySnapshot) => {
+              querySnapshot.docs.forEach((document) {
+                setState(() {
+                  log.doc().set({
+                    "JobID": job.jobID,
+                    "Owner": document["MemberID"],
+                    "DateLog": date,
+                    "Status": "Time Over",
+                    "Type": "Leader",
+                    "DateAt": DateTime.now().millisecondsSinceEpoch,
+                  });
+                });
+              })
+            });
+    //Addmin Log
+    await FirebaseFirestore.instance
+        .collection("Users")
+        .get()
+        .then((querySnapshot) => {
+              querySnapshot.docs.forEach((document) {
+                setState(() {
+                  if (document["Role"] == "Addmin") {
+                    log.doc().set({
+                      "JobID": job.jobID,
+                      "Owner": document.id,
+                      "DateLog": date,
+                      "Status": "Time Over",
+                      "Type": "Addmin",
+                      "DateAt": DateTime.now().millisecondsSinceEpoch,
+                    });
+                  }
+                });
+              })
+            });
+    Navigator.push(context, MaterialPageRoute(builder: (context) {
+      //var profile = _DashboardState.profile;
+      return DashboardPage(
+        user: user,
+      );
+    }));
+  }
+
+  late bool timecheck;
+
+  int H = 0, M = 0;
+
   String stage = "Start";
 
   ActionPane _slider(JobModel job) {
@@ -584,12 +675,42 @@ class _DashboardPageState extends State<DashboardPage> {
                             onPressed: () async {
                               if (formKey.currentState!.validate()) {
                                 formKey.currentState!.save();
-                                await _actionhelp(job);
-
+                                await _setTime(job);
+                                if (timecheck == true) {
+                                  await _actionhelp(job);
+                                  setState(() {
+                                    stage = "Start";
+                                    _recive();
+                                    Navigator.pop(context);
+                                  });
+                                } else {
+                                  _timeover(job);
+                                  showDialog<String>(
+                                    context: context,
+                                    builder: (BuildContext context) =>
+                                        AlertDialog(
+                                      title: const Text(
+                                          'หมดระยะเวลาของการทำงานนี้แล้ว'),
+                                      //content: const Text('AlertDialog description'),
+                                      actions: <Widget>[
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(context, 'OK'),
+                                          child: const Text('OK'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  setState(() {
+                                    stage = "Start";
+                                    _recive();
+                                    Navigator.pop(context);
+                                  });
+                                }
                                 setState(() {
-                                  stage = "Start";
-                                  _recive();
-                                  Navigator.pop(context);
+                                  // stage = "Start";
+                                  // _recive();
+                                  // Navigator.pop(context);
                                 });
                               }
                             },
@@ -609,11 +730,41 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           SlidableAction(
             flex: 2,
-            onPressed: (BuildContext context) {
-              setState(() {
+            onPressed: (BuildContext context) async {
+              // setState(() {
+              await _setTime(job);
+              if (timecheck == true) {
+                print("Done");
                 _actiondone(job);
-                stage = "Start";
-                _recive();
+                setState(() {
+                  stage = "Start";
+                  _recive();
+                });
+              } else {
+                print("Over!");
+                _timeover(job);
+                showDialog<String>(
+                  context: context,
+                  builder: (BuildContext context) => AlertDialog(
+                    title: const Text('หมดระยะเวลาของการทำงานนี้แล้ว'),
+                    //content: const Text('AlertDialog description'),
+                    actions: <Widget>[
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, 'OK'),
+                        child: const Text('OK'),
+                      ),
+                    ],
+                  ),
+                );
+                setState(() {
+                  stage = "Start";
+                  _recive();
+                });
+                
+              }
+              setState(() {
+                //stage = "Start";
+                //_recive();
               });
             },
             backgroundColor: Color(0xFF00a651),
