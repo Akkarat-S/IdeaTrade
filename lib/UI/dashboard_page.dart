@@ -587,12 +587,12 @@ class _DashboardPageState extends State<DashboardPage> {
                 });
               })
             });
-    Navigator.push(context, MaterialPageRoute(builder: (context) {
-      //var profile = _DashboardState.profile;
-      return DashboardPage(
-        user: user,
-      );
-    }));
+    // Navigator.push(context, MaterialPageRoute(builder: (context) {
+    //   //var profile = _DashboardState.profile;
+    //   return DashboardPage(
+    //     user: user,
+    //   );
+    // }));
   }
 
   late bool timecheck;
@@ -694,18 +694,19 @@ class _DashboardPageState extends State<DashboardPage> {
                                       //content: const Text('AlertDialog description'),
                                       actions: <Widget>[
                                         TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(context, 'OK'),
+                                          onPressed: () {
+                                            setState(() {
+                                              stage = "Start";
+                                              _recive();
+                                              Navigator.pop(context);
+                                            });
+                                            Navigator.pop(context, 'OK');
+                                          },
                                           child: const Text('OK'),
                                         ),
                                       ],
                                     ),
                                   );
-                                  setState(() {
-                                    stage = "Start";
-                                    _recive();
-                                    Navigator.pop(context);
-                                  });
                                 }
                                 setState(() {
                                   // stage = "Start";
@@ -750,17 +751,18 @@ class _DashboardPageState extends State<DashboardPage> {
                     //content: const Text('AlertDialog description'),
                     actions: <Widget>[
                       TextButton(
-                        onPressed: () => Navigator.pop(context, 'OK'),
+                        onPressed: () {
+                          setState(() {
+                            stage = "Start";
+                            _recive();
+                          });
+                          Navigator.pop(context, 'OK');
+                        },
                         child: const Text('OK'),
                       ),
                     ],
                   ),
                 );
-                setState(() {
-                  stage = "Start";
-                  _recive();
-                });
-                
               }
               setState(() {
                 //stage = "Start";
